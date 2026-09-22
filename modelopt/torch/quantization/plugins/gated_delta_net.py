@@ -68,9 +68,11 @@ class GatedDeltaNetStateQuantMixin(QuantModule):
     """
 
     def _setup(self):
-        self.gdn_state_quantizer = TensorQuantizer(QuantizerAttributeConfig(enable=False))
-        self.gdn_w_quantizer = TensorQuantizer(QuantizerAttributeConfig(enable=False))
-        self.linear_attention_config = LinearAttentionConfig()
+        for name in ("gdn_state_quantizer", "gdn_w_quantizer"):
+            self._register_temp_attribute(
+                name, TensorQuantizer(QuantizerAttributeConfig(enable=False))
+            )
+        self._register_temp_attribute("linear_attention_config", LinearAttentionConfig())
 
     @property
     def gdn_state_qdq_block_v(self) -> int:

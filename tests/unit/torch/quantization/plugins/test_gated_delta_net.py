@@ -95,6 +95,14 @@ def test_validate_state_quantizer_rejects_unsupported(attributes):
         )
 
 
+def test_dynamic_export_removes_linear_attention_attributes():
+    model = _QuantTinyGatedDeltaNet.convert(TinyGatedDeltaNet())
+    model.export()
+    assert type(model) is TinyGatedDeltaNet
+    for name in ("gdn_state_quantizer", "gdn_w_quantizer", "linear_attention_config"):
+        assert not hasattr(model, name)
+
+
 def test_disabled_state_quantizer_calls_original_kernel():
     model = TinyGatedDeltaNet()
     x = torch.randn(2, 8, 3, 4)
