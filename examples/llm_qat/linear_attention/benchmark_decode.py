@@ -20,12 +20,12 @@ import hashlib
 import json
 import random
 import statistics
-import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import torch
 import torch.nn.functional as F
+from benchmark_utils import benchmark_variants
 from fla.ops.gated_delta_rule import chunk_gated_delta_rule
 from fla.ops.kda import chunk_kda
 
@@ -118,39 +118,14 @@ def main():
             raise RuntimeError(f"{mode}: correctness gate failed: {errors}")
         correctness[mode] = errors
 
-    def measure(fn):
-        torch.cuda.synchronize()
-        allocated = torch.cuda.memory_allocated()
-        torch.cuda.reset_peak_memory_stats()
-        a, b, c = [torch.cuda.Event(enable_timing=True) for _ in range(3)]
-        start = time.perf_counter()
-        a.record()
-        output, final = fn()
-        b.record()
-        torch.autograd.grad(output.square().mean() + final.square().mean(), (*args, initial))
-        c.record()
-        torch.cuda.synchronize()
-        return {
-            "forward_ms": a.elapsed_time(b),
-            "backward_ms": b.elapsed_time(c),
-            "wall_ms": 1000 * (time.perf_counter() - start),
-            "peak_extra_bytes": torch.cuda.max_memory_allocated() - allocated,
-        }
-
-    for fn in variants.values():
-        for _ in range(3):
-            measure(fn)
-    samples = {name: [] for name in variants}
     rng = random.Random(2026)
-    for _ in range(options.repeats):
-        order = list(variants)
-        rng.shuffle(order)
-        for name in order:
-            samples[name].append(measure(variants[name]))
-    summary = {
-        name: {key: statistics.median(s[key] for s in values) for key in values[0]}
-        for name, values in samples.items()
-    }
+    samples, summary = benchmark_variants(
+        variants,
+        lambda result: result[0].square().mean() + result[1].square().mean(),
+        (*args, initial),
+        options.repeats,
+        rng,
+    )
     for mode in ["exact", "token", "decay", "replay"]:
         ratios = [
             a["wall_ms"] / b["wall_ms"]
@@ -167,6 +142,7 @@ def main():
         *list(Path("modelopt/torch/quantization/linear_attention").glob("*.py")),
         Path("modelopt/torch/kernels/quantization/linear_attention/decode.py"),
         Path(__file__),
+        Path(__file__).with_name("benchmark_utils.py"),
     ]
     result = {
         "gpu": torch.cuda.get_device_name(),
