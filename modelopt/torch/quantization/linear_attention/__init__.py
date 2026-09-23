@@ -16,4 +16,8 @@
 """Numerical policies and differentiable references for linear attention."""
 
 from .config import *
+from .decode import *
+from .decode_prefill import *
+from .kda import *
+from .prefill import *
 from .reference import *
